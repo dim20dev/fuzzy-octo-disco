@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Work Tracker Pro | Daily & Monthly Reports</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0e0e0e;
+    color: #f0ede8;
+    font-family: 'IBM Plex Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .screen { display: none; width: 100%; max-width: 480px; padding: 0 0 100px; }
+  .screen.active { display: block; }
+
+  #date-display {
+    background: #161616;
+    border-bottom: 2px solid #f0c040;
+    padding: 28px 20px 22px;
+    text-align: center;
+    cursor: pointer;
+    width: 100%;
+    max-width: 480px;
+    transition: background 0.15s;
+  }
+  #date-display:hover { background: #1f1f1f; }
+  .label { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #888; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+  .big-date { font-family: 'Bebas Neue', sans-serif; font-size: 54px; color: #f0c040; line-height: 1; letter-spacing: 2px; }
+  .sub-date { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #888; margin-top: 4px; }
+  .tap-hint { font-size: 10px; color: #888; margin-top: 8px; opacity: 0.6; }
+
+  #date-picker-overlay {
+    display: none;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 200;
+    align-items: flex-start; justify-content: center; padding-top: 80px;
+  }
+  #date-picker-overlay.show { display: flex; }
+  .date-picker-box {
+    background: #161616;
+    border: 1px solid #2e2e2e;
+    border-top: 3px solid #f0c040;
+    padding: 24px;
+    width: 340px;
+    border-radius: 2px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .date-picker-box h3 { font-family: 'Bebas Neue', monospace; font-size: 22px; color: #f0c040; margin-bottom: 16px; }
+  .date-picker-row input {
+    width: 100%; background: #1f1f1f; border: 1px solid #2e2e2e; color: #f0ede8;
+    padding: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+  }
+  .recent-dates { margin-top: 14px; }
+  .recent-date-btn {
+    display: block; width: 100%; background: #1f1f1f; border: 1px solid #2e2e2e;
+    color: #f0ede8; padding: 10px 14px; margin-bottom: 6px; cursor: pointer;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; text-align: left;
+  }
+  .recent-date-btn:hover { border-color: #f0c040; background: #222; }
+  .dp-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-confirm { flex: 1; background: #f0c040; color: #000; border: none; padding: 12px; font-family: 'Bebas Neue', sans-serif; font-size: 18px; cursor: pointer; }
+  .btn-cancel { background: none; border: 1px solid #2e2e2e; color: #888; padding: 12px 18px; cursor: pointer; }
+
+  .section-title {
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #888;
+    letter-spacing: 2px; text-transform: uppercase; padding: 18px 20px 8px;
+    border-bottom: 1px solid #2e2e2e;
+  }
+  .worker-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px; border-bottom: 1px solid #2e2e2e;
+  }
+  .worker-row:hover { background: #1f1f1f; }
+  .worker-num { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #888; width: 18px; }
+  .worker-name { flex: 1; font-size: 15px; }
+  /* Hidden class for blank names */
+  .worker-row.hidden-worker { display: none; }
+  .check-box {
+    width: 32px; height: 32px; border: 2px solid #2e2e2e;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; background: #1f1f1f;
+  }
+  .check-box.checked { border-color: #4caf50; background: #4caf50; }
+  .check-box .tick { font-size: 18px; color: #000; display: none; }
+  .check-box.checked .tick { display: block; }
+
+  .save-area { padding: 20px; }
+  .btn-save {
+    width: 100%; background: #f0c040; color: #000; border: none;
+    padding: 16px; font-family: 'Bebas Neue', sans-serif; font-size: 22px;
+    cursor: pointer; letter-spacing: 2px;
+  }
+  .btn-save:hover { opacity: 0.85; }
+  .save-status { text-align: center; margin-top: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; min-height: 18px; }
+  .save-status.ok { color: #4caf50; }
+
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 480px;
+    background: #161616; border-top: 2px solid #2e2e2e;
+    display: flex; z-index: 100;
+  }
+  .nav-btn {
+    flex: 1; background: none; border: none; color: #888;
+    padding: 14px 10px 12px; cursor: pointer; font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px; text-transform: uppercase;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .nav-btn .nav-icon { font-size: 20px; }
+  .nav-btn.active { color: #f0c040; border-top: 2px solid #f0c040; margin-top: -2px; }
+
+  .settings-wrap, .reports-wrap { padding: 20px; }
+  .settings-wrap h2, .reports-wrap h2 { font-family: 'Bebas Neue', sans-serif; font-size: 30px; color: #f0c040; margin-bottom: 18px; }
+  .name-edit-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+  .name-edit-row span { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #888; width: 20px; }
+  .name-edit-row input {
+    flex: 1; background: #1f1f1f; border: 1px solid #2e2e2e; color: #f0ede8;
+    padding: 10px 12px; font-family: 'IBM Plex Sans', sans-serif; font-size: 14px;
+  }
+  .btn-save-names {
+    width: 100%; margin-top: 16px; background: #e05a00; color: #fff; border: none;
+    padding: 14px; font-family: 'Bebas Neue', sans-serif; font-size: 20px; cursor: pointer;
+  }
+  .drive-section { margin-top: 28px; padding-top: 20px; border-top: 1px solid #2e2e2e; }
+  .drive-section h3 { font-family: 'Bebas Neue', sans-serif; font-size: 22px; margin-bottom: 6px; }
+  .drive-status { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #e05a50; }
+  .status-dot.connected { background: #4caf50; }
+  .btn-drive { width: 100%; background: #4285f4; color: #fff; border: none; padding: 13px; font-weight: 600; cursor: pointer; }
+  .report-card {
+    background: #1f1f1f; border: 1px solid #2e2e2e;
+    padding: 16px 18px; margin-bottom: 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-left: 3px solid #e05a00;
+  }
+  .report-card .rc-info .rc-date { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; }
+  .report-card .rc-info .rc-meta { font-size: 12px; color: #888; margin-top: 3px; }
+  .btn-open-report {
+    background: none; border: 1px solid #f0c040; color: #f0c040;
+    padding: 8px 14px; font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    cursor: pointer;
+  }
+  .btn-open-report:hover { background: #f0c040; color: #000; }
+  .month-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .month-nav button { background: #1f1f1f; border: 1px solid #2e2e2e; color: #f0ede8; width: 36px; height: 36px; cursor: pointer; }
+  .month-nav .month-label { flex: 1; text-align: center; font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: #f0c040; }
+  .empty-state { text-align: center; padding: 50px 20px; color: #888; }
+  .overlay-msg {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 500;
+    display: none; align-items: center; justify-content: center;
+  }
+  .overlay-msg.show { display: flex; }
+  .overlay-box { background: #161616; border-top: 3px solid #4caf50; padding: 30px 36px; text-align: center; }
+  .overlay-box .o-icon { font-size: 40px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div id="date-picker-overlay">
+  <div class="date-picker-box">
+    <h3>SELECT DATE</h3>
+    <div class="date-picker-row"><input type="date" id="dp-input"></div>
+    <div class="recent-dates"><div class="label">Recent Dates</div><div id="recent-dates-list"></div></div>
+    <div class="dp-actions"><button class="btn-cancel" onclick="closeDatePicker()">Cancel</button><button class="btn-confirm" onclick="confirmDate()">CONFIRM</button></div>
+  </div>
+</div>
+
+<div class="overlay-msg" id="success-overlay"><div class="overlay-box"><div class="o-icon">✅</div><p id="success-msg">Saved!</p></div></div>
+
+<div id="date-display" onclick="openDatePicker()">
+  <div class="label">CURRENT DATE — TAP TO CHANGE</div>
+  <div class="big-date" id="hdr-date">—</div>
+  <div class="sub-date" id="hdr-weekday">—</div>
+  <div class="tap-hint">▼ tap to pick another date</div>
+</div>
+
+<div class="screen active" id="screen-tracker">
+  <div class="section-title">WORKERS — CHECK WHO WORKED TODAY</div>
+  <div id="workers-list"></div>
+  <div class="save-area">
+    <button class="btn-save" onclick="saveDay()">💾 SAVE DAY</button>
+    <div class="save-status" id="save-status"></div>
+  </div>
+</div>
+
+<div class="screen" id="screen-settings">
+  <div class="settings-wrap">
+    <h2>⚙️ SETTINGS</h2>
+    <div id="name-edits"></div>
+    <button class="btn-save-names" onclick="saveNames()">SAVE NAMES</button>
+    <div class="drive-section">
+      <h3>☁️ Firebase Sync</h3>
+      <p>Your data automatically syncs to the cloud. Changes reflect on all devices.</p>
+      <div class="drive-status"><div class="status-dot" id="drive-dot"></div><span class="status-label" id="drive-label">Firebase Active</span></div>
+      <button class="btn-drive" onclick="manualSyncToFirebase()" style="margin-top:8px; background:#ff6d00;">🔄 Manual Sync Now</button>
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid #2e2e2e;">
+        <button class="btn-save-names" style="background:#1f1f1f; color:#f0ede8; border:1px solid #2e2e2e;" onclick="exportJSON()">⬇ Export Backup</button>
+        <label class="btn-save-names" style="margin-top:8px; display:block; text-align:center; background:#1f1f1f; border:1px solid #2e2e2e; cursor:pointer;">⬆ Import Backup<input type="file" accept=".json" onchange="importJSON(event)" style="display:none"></label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="screen-monthly">
+  <div class="reports-wrap">
+    <h2>📅 MONTHLY REPORTS</h2>
+    <div class="month-nav"><button onclick="changeReportMonth(-1)">◀</button><div class="month-label" id="report-month-label">—</div><button onclick="changeReportMonth(1)">▶</button></div>
+    <div id="monthly-list"></div>
+  </div>
+</div>
+
+<div class="screen" id="screen-previous">
+  <div class="reports-wrap">
+    <h2>🗂️ PREVIOUS SAVES</h2>
+    <div id="previous-list"></div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <button class="nav-btn active" id="nav-tracker" onclick="showScreen('tracker')"><span class="nav-icon">📋</span>TODAY</button>
+  <button class="nav-btn" id="nav-settings" onclick="showScreen('settings')"><span class="nav-icon">⚙️</span>SETTINGS</button>
+  <button class="nav-btn" id="nav-monthly" onclick="showScreen('monthly')"><span class="nav-icon">📅</span>MONTHLY</button>
+  <button class="nav-btn" id="nav-previous" onclick="showScreen('previous')"><span class="nav-icon">🗂️</span>PREVIOUS</button>
+</nav>
+
+<script>
+// ====================== FIREBASE CONFIGURATION ======================
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyDqp_twy2X4lxTrKsMrB3EIs8DYzlVfJ-8',
+  databaseURL: 'https://workers-27d2f-default-rtdb.europe-west1.firebasedatabase.app/'
+};
+
+// ====================== STATE ======================
+const TOTAL_WORKERS = 15;
+const DEFAULT_NAMES = Array.from({length: TOTAL_WORKERS}, (_,i)=>`Worker ${i+1}`);
+let state = {
+  names: [...DEFAULT_NAMES],
+  currentDate: new Date().toISOString().slice(0,10),
+  checks: {},
+  saves: {}
+};
+let reportMonth = new Date();
+
+// ====================== HELPERS ======================
+function fmtDateShort(str) { const d=new Date(str+'T12:00:00'); return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+function fmtFullDate(str) { const d=new Date(str+'T12:00:00'); return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}); }
+function getDayNumber(str) { const d=new Date(str+'T12:00:00'); return d.getDate(); }
+
+// Ensures names array always has exactly TOTAL_WORKERS entries
+function ensureWorkerCount() {
+  while (state.names.length < TOTAL_WORKERS) {
+    state.names.push(`Worker ${state.names.length + 1}`);
+  }
+  // Also ensure checks arrays have the right length
+  for (let d in state.checks) {
+    while (state.checks[d].length < TOTAL_WORKERS) {
+      state.checks[d].push(false);
+    }
+  }
+  // And saves
+  for (let d in state.saves) {
+    const s = state.saves[d];
+    if (s.names.length < TOTAL_WORKERS) {
+      while (s.names.length < TOTAL_WORKERS) {
+        s.names.push(`Worker ${s.names.length + 1}`);
+        s.checks.push(false);
+      }
+      // Recalculate workedCount
+      let wc = 0;
+      for (let i = 0; i < TOTAL_WORKERS; i++) {
+        if (!isBlankName(s.names[i]) && s.checks[i]) wc++;
+      }
+      s.workedCount = wc;
+    }
+  }
+}
+
+// ====================== PERSISTENCE ======================
+function persistToLocal() { localStorage.setItem('wt_state_v2', JSON.stringify(state)); }
+function loadLocal() {
+  const raw = localStorage.getItem('wt_state_v2');
+  if(raw) try{ const data=JSON.parse(raw); state={...state, ...data}; if(!state.saves) state.saves={}; if(!state.checks) state.checks={}; ensureWorkerCount(); } catch(e){}
+}
+
+async function syncToFirebase() {
+  if(!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) return;
+  try {
+    const payload = { names: state.names, checks: state.checks, saves: state.saves };
+    await fetch(`${FIREBASE_CONFIG.databaseURL}/worktracker.json`, {
+      method: 'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+  } catch(e){ console.warn("Firebase save error",e); }
+}
+
+async function loadFromFirebase() {
+  if(!FIREBASE_CONFIG.apiKey || !FIREBASE_CONFIG.databaseURL) return false;
+  try {
+    const res = await fetch(`${FIREBASE_CONFIG.databaseURL}/worktracker.json`);
+    if(res.ok){
+      const data = await res.json();
+      if(data){
+        if(data.names) state.names = data.names;
+        if(data.checks) state.checks = data.checks;
+        if(data.saves) state.saves = data.saves;
+        ensureWorkerCount();
+        return true;
+      }
+    }
+  } catch(e){ console.warn("Firebase load error",e); }
+  return false;
+}
+
+function saveFullState() {
+  persistToLocal();
+  syncToFirebase();
+}
+
+function manualSyncToFirebase() {
+  syncToFirebase();
+  showSuccess("Manual sync triggered! ✓");
+}
+
+// ====================== UI RENDERING ======================
+function renderHeader() {
+  const d = new Date(state.currentDate+'T12:00:00');
+  document.getElementById('hdr-date').textContent = `${d.getDate().toString().padStart(2,'0')} ${d.toLocaleDateString('en-US',{month:'short'}).toUpperCase()} ${d.getFullYear()}`;
+  document.getElementById('hdr-weekday').textContent = d.toLocaleDateString('en-US',{weekday:'long'});
+}
+
+// Check if a name should be considered "blank" (empty or just whitespace)
+function isBlankName(name) { return !name || name.trim() === ''; }
+
+function renderWorkers() {
+  const container = document.getElementById('workers-list');
+  if(!container) return;
+  if(!state.checks[state.currentDate]) state.checks[state.currentDate] = new Array(TOTAL_WORKERS).fill(false);
+  const cur = state.checks[state.currentDate];
+  
+  // Filter out blank names - only show non-blank workers
+  const visibleWorkers = [];
+  for(let i = 0; i < state.names.length; i++) {
+    if(!isBlankName(state.names[i])) {
+      visibleWorkers.push({ index: i, name: state.names[i] });
+    }
+  }
+  
+  if(visibleWorkers.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="padding:40px; text-align:center;">No workers added. Go to Settings to add names.</div>`;
+    return;
+  }
+  
+  container.innerHTML = visibleWorkers.map((worker, displayIdx) => {
+    const checked = cur[worker.index] ? 'checked' : '';
+    return `
+    <div class="worker-row" data-worker-index="${worker.index}">
+      <span class="worker-num">${displayIdx+1}</span>
+      <span class="worker-name">${escapeHtml(worker.name)}</span>
+      <div class="check-wrap">
+        <div class="check-box ${checked}" onclick="toggleCheck(${worker.index})" id="chk-${worker.index}">
+          <span class="tick">✓</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCheck(originalIndex){
+  if(!state.checks[state.currentDate]) state.checks[state.currentDate] = new Array(TOTAL_WORKERS).fill(false);
+  state.checks[state.currentDate][originalIndex] = !state.checks[state.currentDate][originalIndex];
+  const box = document.getElementById(`chk-${originalIndex}`);
+  if(box) box.classList.toggle('checked', state.checks[state.currentDate][originalIndex]);
+  saveFullState();
+}
+
+function saveDay(){
+  const checks = state.checks[state.currentDate] || new Array(TOTAL_WORKERS).fill(false);
+  // Count only non-blank workers that worked
+  let workedCount = 0;
+  for(let i = 0; i < state.names.length; i++) {
+    if(!isBlankName(state.names[i]) && checks[i]) workedCount++;
+  }
+  state.saves[state.currentDate] = {
+    date: state.currentDate,
+    names: [...state.names],
+    checks: [...checks],
+    savedAt: new Date().toISOString(),
+    workedCount: workedCount
+  };
+  saveFullState();
+  const statusDiv = document.getElementById('save-status');
+  statusDiv.textContent = `✓ Saved — ${workedCount} worker(s) on ${fmtDateShort(state.currentDate)}`;
+  statusDiv.className = 'save-status ok';
+  setTimeout(()=>{ if(statusDiv) statusDiv.textContent=''; }, 3000);
+  showSuccess("Day saved! ☁️ Synced to cloud");
+}
+
+function renderSettings(){
+  const wrap = document.getElementById('name-edits');
+  if(wrap) wrap.innerHTML = state.names.map((name,i)=>`
+    <div class="name-edit-row">
+      <span>${i+1}</span>
+      <input type="text" id="name-edit-${i}" value="${escapeHtml(name)}" placeholder="Leave blank to hide this worker">
+    </div>
+  `).join('');
+  updateDriveUI();
+}
+
+function saveNames(){
+  const newNames = state.names.map((_,i)=> {
+    const val = document.getElementById(`name-edit-${i}`)?.value || '';
+    return val; // Keep blank as empty string
+  });
+  state.names = newNames;
+  
+  // Clean up checks and saves for blank names (keep data but they won't display)
+  for(let d in state.checks){
+    if(state.checks[d] && state.checks[d].length !== TOTAL_WORKERS){
+      const old = state.checks[d];
+      const newArr = new Array(TOTAL_WORKERS).fill(false);
+      for(let i=0; i<Math.min(old.length, TOTAL_WORKERS); i++) newArr[i]=old[i];
+      state.checks[d]=newArr;
+    }
+  }
+  for(let d in state.saves){
+    if(state.saves[d].checks.length !== TOTAL_WORKERS){
+      const oldChecks = state.saves[d].checks;
+      const newChecks = new Array(TOTAL_WORKERS).fill(false);
+      for(let i=0;i<Math.min(oldChecks.length, TOTAL_WORKERS);i++) newChecks[i]=oldChecks[i];
+      state.saves[d].checks = newChecks;
+      state.saves[d].names = [...state.names];
+      // Recalculate workedCount excluding blank names
+      let wc = 0;
+      for(let i=0; i<TOTAL_WORKERS; i++) {
+        if(!isBlankName(state.names[i]) && newChecks[i]) wc++;
+      }
+      state.saves[d].workedCount = wc;
+    } else {
+      state.saves[d].names = [...state.names];
+      let wc = 0;
+      for(let i=0; i<TOTAL_WORKERS; i++) {
+        if(!isBlankName(state.names[i]) && state.saves[d].checks[i]) wc++;
+      }
+      state.saves[d].workedCount = wc;
+    }
+  }
+  ensureWorkerCount();
+  renderWorkers();
+  saveFullState();
+  showSuccess("Worker names updated! Blank names are now hidden. ☁️");
+}
+
+function updateDriveUI() {
+  const isConnected = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseURL);
+  const dot = document.getElementById('drive-dot');
+  const label = document.getElementById('drive-label');
+  if(dot) dot.classList.toggle('connected', isConnected);
+  if(label) label.textContent = isConnected ? "Firebase Active ✓ (Auto-sync)" : "Firebase configured";
+}
+
+// ====================== MONTHLY & PREVIOUS ======================
+function renderMonthly(){
+  const yr = reportMonth.getFullYear();
+  const mo = String(reportMonth.getMonth()+1).padStart(2,'0');
+  const monthKey = `${yr}-${mo}`;
+  document.getElementById('report-month-label').textContent = reportMonth.toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase();
+  const days = Object.keys(state.saves).filter(d => d.startsWith(monthKey)).sort();
+  const container = document.getElementById('monthly-list');
+  if(days.length===0){
+    container.innerHTML = `<div class="empty-state">No records for this month.</div>`;
+    return;
+  }
+  let totalShifts = 0;
+  days.forEach(d=>{ totalShifts += (state.saves[d].workedCount || 0); });
+  container.innerHTML = `
+    <div class="report-card" style="border-left-color:#f0c040">
+      <div class="rc-info"><div class="rc-date">📊 SUMMARY</div><div class="rc-meta">${days.length} days · ${totalShifts} total shifts</div></div>
+      <button class="btn-open-report" onclick="generateMonthlyPDF('${monthKey}')">PDF REPORT</button>
+    </div>
+  `;
+}
+
+function renderPrevious(){
+  const days = Object.keys(state.saves).sort().reverse();
+  const container = document.getElementById('previous-list');
+  if(days.length===0){
+    container.innerHTML = `<div class="empty-state">No saved days yet. Save your first day!</div>`;
+    return;
+  }
+  container.innerHTML = days.map(d=>{
+    const s = state.saves[d];
+    const workedCount = s.workedCount || 0;
+    return `<div class="report-card">
+      <div class="rc-info"><div class="rc-date">${fmtDateShort(d)}</div><div class="rc-meta">${workedCount} worked · saved ${new Date(s.savedAt).toLocaleTimeString()}</div></div>
+      <button class="btn-open-report" onclick="generateDayPDF('${d}')">OPEN PDF</button>
+    </div>`;
+  }).join('');
+}
+
+// ====================== PDF GENERATION ======================
+function generateDayPDF(dateStr){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const save = state.saves[dateStr];
+  if(!save) return;
+  
+  // Filter out blank names for display
+  const visibleIndices = [];
+  const visibleNames = [];
+  for(let i=0; i<save.names.length; i++) {
+    if(!isBlankName(save.names[i])) {
+      visibleIndices.push(i);
+      visibleNames.push(save.names[i]);
+    }
+  }
+  
+  const workedNames = visibleNames.filter((_,idx) => save.checks[visibleIndices[idx]]);
+  const absentNames = visibleNames.filter((_,idx) => !save.checks[visibleIndices[idx]]);
+  
+  doc.setFillColor(240,192,64); doc.rect(0,0,210,30,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.setTextColor(0,0,0);
+  doc.text('DAILY WORK REPORT', 15, 14);
+  doc.setFontSize(11); doc.setTextColor(40,40,40); doc.text(fmtFullDate(dateStr), 15, 22);
+  doc.setFillColor(245,245,245); doc.rect(10,35,190,22,'F');
+  doc.setFontSize(10); doc.setTextColor(100,100,100);
+  doc.text('GENERATED', 15,43); doc.text('PRESENT',80,43); doc.text('ABSENT',145,43);
+  doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.setTextColor(20,20,20);
+  doc.text(new Date().toLocaleDateString(), 15,52);
+  doc.text(String(workedNames.length), 80,52);
+  doc.text(String(absentNames.length), 145,52);
+  let y=68;
+  doc.setFillColor(30,30,30); doc.rect(10,y,190,9,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(240,192,64);
+  doc.text('#',15,y+6.5); doc.text('NAME',25,y+6.5); doc.text('STATUS',155,y+6.5);
+  y+=9;
+  visibleNames.forEach((name, idx)=>{
+    const originalIdx = visibleIndices[idx];
+    const present = save.checks[originalIdx];
+    const rowBg = idx%2===0 ? [255,255,255]:[248,248,248];
+    doc.setFillColor(...rowBg); doc.rect(10,y,190,9,'F');
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40,40,40);
+    doc.text(String(idx+1),15,y+6.5); doc.text(name,25,y+6.5);
+    if(present){
+      doc.setFillColor(76,175,80); doc.roundedRect(150,y+1.5,42,6,1,1,'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.text('✓ WORKED',155,y+6.5);
+    } else {
+      doc.setFillColor(220,220,220); doc.roundedRect(150,y+1.5,42,6,1,1,'F');
+      doc.setTextColor(120,120,120); doc.setFont('helvetica','normal'); doc.text('— ABSENT',155,y+6.5);
+    }
+    y+=9;
+  });
+  doc.setFontSize(9); doc.setTextColor(150,150,150);
+  doc.text('Work Tracker Pro', 15, 285);
+  doc.save(`workday-${dateStr}.pdf`);
+}
+
+// Helper: wrap long date text into multiple lines
+function wrapText(doc, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(', ');
+  let line = '';
+  let currentY = y;
+  const lines = [];
+  
+  for (let i = 0; i < words.length; i++) {
+    const testLine = line ? line + ', ' + words[i] : words[i];
+    const testWidth = doc.getStringUnitWidth(testLine) * doc.getFontSize() / doc.internal.scaleFactor;
+    
+    if (testWidth > maxWidth && line) {
+      lines.push(line);
+      line = words[i];
+    } else {
+      line = testLine;
+    }
+  }
+  if (line) lines.push(line);
+  
+  lines.forEach(l => {
+    doc.text(l, x, currentY);
+    currentY += lineHeight;
+  });
+  
+  return lines.length * lineHeight;
+}
+
+function generateMonthlyPDF(monthKey){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const days = Object.keys(state.saves).filter(d=>d.startsWith(monthKey)).sort();
+  if(days.length===0) return;
+  const monthName = new Date(`${monthKey}-01`).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  doc.setFillColor(240,192,64); doc.rect(0,0,210,30,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(22); doc.setTextColor(0,0,0);
+  doc.text('MONTHLY WORK REPORT', 15, 14);
+  doc.setFontSize(12); doc.text(monthName.toUpperCase(), 15, 23);
+  let totalShifts = 0;
+  days.forEach(d=>{ totalShifts += (state.saves[d].workedCount || 0); });
+  doc.setFillColor(245,245,245); doc.rect(10,35,190,22,'F');
+  doc.setFontSize(10); doc.setTextColor(100,100,100);
+  doc.text('DAYS',15,43); doc.text('TOTAL SHIFTS',80,43); doc.text('DATE',145,43);
+  doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.setTextColor(20,20,20);
+  doc.text(String(days.length),15,52); doc.text(String(totalShifts),80,52); doc.text(new Date().toLocaleDateString(),145,52);
+  
+  // Build worker stats with list of dates they worked (day numbers)
+  let workerStats = {};
+  let workerDates = {};
+  state.names.forEach((n, idx) => {
+    if(!isBlankName(n)) {
+      workerStats[n] = 0;
+      workerDates[n] = [];
+    }
+  });
+  
+  days.forEach(d => {
+    const s = state.saves[d];
+    const dayNum = getDayNumber(d);
+    s.names.forEach((n, i) => {
+      if(!isBlankName(n) && s.checks[i]) {
+        workerStats[n] = (workerStats[n] || 0) + 1;
+        if(!workerDates[n]) workerDates[n] = [];
+        if(!workerDates[n].includes(dayNum)) workerDates[n].push(dayNum);
+      }
+    });
+  });
+  
+  // Sort date lists
+  for(let w in workerDates) {
+    workerDates[w].sort((a,b)=>a-b);
+  }
+  
+  let y = 68;
+  doc.setFillColor(30,30,30); doc.rect(10,y,190,9,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(240,192,64);
+  doc.text('WORKER',15,y+6.5); doc.text('TOTAL',90,y+6.5); doc.text('DATES WORKED (day of month)',110,y+6.5);
+  y+=9;
+  
+  const visibleWorkers = state.names.filter(n => !isBlankName(n));
+  const dateColX = 110; // x position for dates column
+  const dateColWidth = 85; // max width for dates text
+  const baseRowHeight = 8; // minimum row height
+  const lineHeight = 4; // height per wrapped line
+  
+  visibleWorkers.forEach((name, idx) => {
+    const dw = workerStats[name] || 0;
+    const datesList = workerDates[name] || [];
+    const datesStr = datesList.join(', ');
+    const rowBg = idx%2===0 ? [255,255,255]:[248,248,248];
+    
+    // Calculate how many lines the dates text will need
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    const textLines = doc.splitTextToSize(datesStr || '—', dateColWidth);
+    const neededHeight = Math.max(baseRowHeight, lineHeight * textLines.length + 2);
+    
+    // Check if we need a new page
+    if(y + neededHeight > 280) {
+      doc.addPage();
+      y = 20;
+      doc.setFillColor(30,30,30); doc.rect(10,y,190,9,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(240,192,64);
+      doc.text('WORKER',15,y+6.5); doc.text('TOTAL',90,y+6.5); doc.text('DATES WORKED',110,y+6.5);
+      y+=9;
+    }
+    
+    // Draw row background
+    doc.setFillColor(...rowBg); doc.rect(10,y,190,neededHeight,'F');
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(40,40,40);
+    
+    // Worker name and total
+    doc.text(name,15,y+5);
+    doc.text(String(dw),90,y+5);
+    
+    // Dates - wrapped to fit
+    const datesText = datesStr || '—';
+    const splitDates = doc.splitTextToSize(datesText, dateColWidth);
+    doc.text(splitDates, dateColX, y+5);
+    
+    y += neededHeight;
+  });
+  
+  doc.setFontSize(9); doc.setTextColor(150,150,150);
+  doc.text('Work Tracker Pro — Monthly Report', 15, 285);
+  doc.save(`monthly-${monthKey}.pdf`);
+}
+
+// ====================== DATE PICKER & UTILITIES ======================
+function openDatePicker(){
+  document.getElementById('dp-input').value = state.currentDate;
+  const listDiv = document.getElementById('recent-dates-list');
+  let recent = [];
+  for(let i=0;i<14;i++){ let d=new Date(); d.setDate(d.getDate()-i); recent.push(d.toISOString().slice(0,10)); }
+  listDiv.innerHTML = recent.map(d=>`<button class="recent-date-btn" onclick="selectRecentDate('${d}')">${fmtDateShort(d)} ${state.saves[d]?'✓':''}</button>`).join('');
+  document.getElementById('date-picker-overlay').classList.add('show');
+}
+function closeDatePicker(){ document.getElementById('date-picker-overlay').classList.remove('show'); }
+function confirmDate(){ const val=document.getElementById('dp-input').value; if(val){ state.currentDate=val; renderHeader(); renderWorkers(); saveFullState(); } closeDatePicker(); }
+function selectRecentDate(d){ document.getElementById('dp-input').value=d; }
+function exportJSON(){ const blob=new Blob([JSON.stringify({names:state.names,checks:state.checks,saves:state.saves},null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); }
+function importJSON(e){ const file=e.target.files[0]; if(!file) return; const reader=new FileReader(); reader.onload=ev=>{ try{ const data=JSON.parse(ev.target.result); if(data.names) state.names=data.names; if(data.checks) state.checks=data.checks; if(data.saves) state.saves=data.saves; ensureWorkerCount(); renderAll(); saveFullState(); showSuccess("Backup restored! ☁️"); }catch(e){ alert("Invalid file"); } }; reader.readAsText(file); }
+function changeReportMonth(dir){ reportMonth.setMonth(reportMonth.getMonth()+dir); renderMonthly(); }
+function showScreen(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`screen-${name}`).classList.add('active');
+  document.getElementById(`nav-${name}`).classList.add('active');
+  if(name==='monthly') renderMonthly();
+  if(name==='previous') renderPrevious();
+  if(name==='settings') renderSettings();
+}
+function showSuccess(msg){ const el=document.getElementById('success-msg'); if(el) el.textContent=msg; const ov=document.getElementById('success-overlay'); ov.classList.add('show'); setTimeout(()=>ov.classList.remove('show'),1800); }
+function renderAll(){ renderHeader(); renderWorkers(); updateDriveUI(); }
+function escapeHtml(str){ return str.replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+
+// ====================== INIT ======================
+loadLocal();
+loadFromFirebase().then(()=>{ renderAll(); saveFullState(); }).catch(()=>{ renderAll(); });
+</script>
+</body>
+</html>
